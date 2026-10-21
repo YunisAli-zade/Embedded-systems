@@ -1,0 +1,64 @@
+#include <stdio.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+
+#include "driver/gpio.h"
+#include "esp_log.h"
+
+#define MOVE_PIN GPIO_NUM_4
+
+static const char *TAG = "PIR";
+static QueueHandle_t gpio_evt_queue = NULL;
+
+// ISR - yalnız sürətli, ISR-safe funksiyalar
+static void IRAM_ATTR gpio_isr_handler(void *arg)
+{
+    uint32_t gpio_num = (uint32_t)arg;
+    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
+}
+
+// Əsl işi görən task
+static void gpio_task(void *arg)
+{
+    uint32_t io_num;
+    for (;;)
+    {
+        if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY))
+        {
+            int level = gpio_get_level(io_num);
+            ESP_LOGI(TAG, "GPIO[%lu] dəyişdi, yeni səviyyə: %d", io_num, level);
+        }
+    }
+}
+
+void app_main(void)
+{
+    gpio_config_t gpioconf = {
+        .pin_bit_mask = (1ULL << MOVE_PIN),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_ANYEDGE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE
+    };
+    gpio_config(&gpioconf);
+
+    // Event queue yaradılır
+    gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
+
+    // Task başladılır
+    xTaskCreate(gpio_task, "gpio_task", 2048, NULL, 10, NULL);
+
+    // ISR service quraşdırılır (bir dəfə çağırılmalıdır)
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(MOVE_PIN, gpio_isr_handler, (void *)MOVE_PIN);
+
+    ESP_LOGI(TAG, "PIR sensor interrupt hazırdır");
+
+    // app_main sərbəst qala bilər, task işini görür
+    while (1)
+    {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}

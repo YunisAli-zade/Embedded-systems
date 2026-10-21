@@ -1,0 +1,88 @@
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "led_strip.h"
+#include "esp_log.h"
+
+// Define the single data pin connected to your smart LED
+// Change this to match your board's built-in LED pin (e.g., GPIO 8 for ESP32-C3 DevKit)
+#define LED_STRIP_BLINK_GPIO  48
+
+static const char *TAG = "main";
+static led_strip_handle_t led_strip;
+
+/**
+ * @brief Configures and initializes the single addressable LED
+ */
+void init_smart_led(void)
+{
+    ESP_LOGI(TAG, "Initializing single addressable LED...");
+
+    /* LED strip common configuration (v3.x compatible) */
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = LED_STRIP_BLINK_GPIO,
+        .max_leds = 1, // Only 1 LED in the sequence
+        .led_model = LED_MODEL_WS2812, // Determines timing
+        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
+        .flags = {
+            .invert_out = false,
+        }
+    };
+
+    /* RMT Backend configuration */
+    led_strip_rmt_config_t rmt_config = {
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz = 10 * 1000 * 1000, // 10MHz
+        .flags.with_dma = false,
+    };
+
+    // Create the LED strip object using the RMT peripheral
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+
+    // Clear the LED (turn off initially)
+    led_strip_clear(led_strip);
+}
+
+/**
+ * @brief Convert HSV to RGB
+ * @param h Hue 0-359
+ * @param s Saturation 0-100
+ * @param v Value (brightness) 0-100
+ */
+static void hsv_to_rgb(uint32_t h, uint32_t s, uint32_t v,
+                       uint32_t *r, uint32_t *g, uint32_t *b)
+{
+    h %= 360;
+    uint32_t rgb_max = v * 255 / 100;
+    uint32_t rgb_min = rgb_max * (100 - s) / 100;
+    uint32_t i = h / 60;
+    uint32_t diff = h % 60;
+    uint32_t rgb_adj = (rgb_max - rgb_min) * diff / 60;
+
+    switch (i) {
+    case 0:  *r = rgb_max;           *g = rgb_min + rgb_adj; *b = rgb_min;           break;
+    case 1:  *r = rgb_max - rgb_adj; *g = rgb_max;           *b = rgb_min;           break;
+    case 2:  *r = rgb_min;           *g = rgb_max;           *b = rgb_min + rgb_adj; break;
+    case 3:  *r = rgb_min;           *g = rgb_max - rgb_adj; *b = rgb_max;           break;
+    case 4:  *r = rgb_min + rgb_adj; *g = rgb_min;           *b = rgb_max;           break;
+    default: *r = rgb_max;           *g = rgb_min;           *b = rgb_max - rgb_adj; break;
+    }
+}
+
+void app_main(void)
+{
+    init_smart_led();
+
+    uint32_t hue = 0;
+    uint32_t r, g, b;
+
+    while (1) {
+        // Full saturation, 25% brightness (these LEDs are very bright)
+        hsv_to_rgb(hue, 100, 5, &r, &g, &b);
+        led_strip_set_pixel(led_strip, 0, r, g, b);
+        led_strip_refresh(led_strip);
+
+        hue = (hue + 1) % 360;          // advance 1 degree per step
+        vTaskDelay(pdMS_TO_TICKS(20));  // 20 ms * 360 steps = ~7.2 s per full cycle
+    }
+}
