@@ -1,0 +1,49 @@
+#include <stdio.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "driver/gpio.h"
+#include "esp_err.h"
+#include "esp_log.h"
+
+#include "hc_sr04.h"
+
+#define TRIGGER_PIN GPIO_NUM_4
+#define ECHO_PIN GPIO_NUM_5
+
+static const char *TAG = "hc_sr04_example";
+
+void app_main(void)
+{
+    hc_sr04_config_t hcconf = {
+        .trigger_pin = TRIGGER_PIN,
+        .echo_pin = ECHO_PIN,
+        .sound_speed_cm_per_us = 0.0f,
+        .timeout_us = 0
+    };
+
+    hc_sr04_handle_t handle = NULL;
+
+    hc_sr04_new_sensor(&hcconf, &handle);
+
+    while (1)
+    {
+        float distance_cm = 0.0f;
+        esp_err_t ret = hc_sr04_read_cm(handle, &distance_cm);
+
+        if (ret == ESP_OK)
+        {
+            ESP_LOGI(TAG, "distance: %.2f cm", distance_cm);
+        }
+        else if (ret == ESP_ERR_TIMEOUT)
+        {
+            ESP_LOGW(TAG, "measurement timeout");
+        }
+        else
+        {
+            ESP_LOGE(TAG, "measurement failed: %s", esp_err_to_name(ret));
+        }
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+}
