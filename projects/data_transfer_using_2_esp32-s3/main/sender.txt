@@ -1,0 +1,55 @@
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_now.h"
+#include "esp_wifi.h"
+#include "nvs_flash.h"
+#include "esp_log.h"
+
+static const char *TAG = "ESP_NOW_SENDER";
+
+// Qarşı platanın MAC ünvanını bura yaz (Addım 1-də tapdığın)
+static uint8_t peer_mac[6] = {0x8C, 0xBF, 0xEA, 0x15, 0xF1, 0xC0};
+
+typedef struct {
+    int counter;
+    char message[32];
+} data_packet_t;
+
+void send_callback(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
+    ESP_LOGI(TAG, "Göndərmə statusu: %s",
+             status == ESP_NOW_SEND_SUCCESS ? "UĞURLU" : "XƏTA");
+}
+
+void app_main(void) {
+    nvs_flash_init();
+    esp_netif_init();
+    esp_event_loop_create_default();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    esp_wifi_init(&cfg);
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_start();
+
+    esp_now_init();
+    esp_now_register_send_cb(send_callback);
+
+    esp_now_peer_info_t peer_info = {};
+    memcpy(peer_info.peer_addr, peer_mac, 6);
+    peer_info.channel = 0;
+    peer_info.encrypt = false;
+    esp_now_add_peer(&peer_info);
+
+    data_packet_t packet;
+    int counter = 0;
+
+    while (1) {
+        packet.counter = counter++;
+        snprintf(packet.message, sizeof(packet.message), "Salam #%d", packet.counter);
+
+        esp_now_send(peer_mac, (uint8_t *)&packet, sizeof(packet));
+        ESP_LOGI(TAG, "Göndərildi: %s", packet.message);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
