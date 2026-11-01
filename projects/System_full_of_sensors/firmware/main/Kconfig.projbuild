@@ -1,0 +1,113 @@
+menu "Sensor Gateway"
+
+    config GW_WIFI_SSID
+        string "WiFi SSID (2.4 GHz)"
+        default "ALHN-451D"
+
+    config GW_WIFI_PASSWORD
+        string "WiFi password"
+        default "sMzqN8cQNQ"
+
+    config GW_SERVER_URL
+        string "Server URL (laptop IP + port + path)"
+        default "http://192.168.1.70:5000/api/readings"
+
+    config GW_API_KEY
+        string "API key (must match API_KEY on the server)"
+        default "mening-gizli-acarim"
+
+    config GW_DEVICE_ID
+        string "Device ID"
+        default "esp32s3-01"
+
+    config GW_SAMPLE_PERIOD_MS
+        int "Sample period (ms), min 2000 because of DHT11"
+        default 5000
+        range 2000 600000
+
+    comment "--- Vibration sensor (digital, e.g. SW-420 / KY-002) ---"
+
+    config GW_VIB_ENABLE
+        bool "Enable vibration sensor"
+        default y
+
+    config GW_VIB_GPIO
+        int "Vibration sensor GPIO"
+        default 39
+        range 0 48
+        depends on GW_VIB_ENABLE
+
+    config GW_VIB_ACTIVE_HIGH
+        bool "Output goes HIGH when vibration is detected (turn off if it goes LOW)"
+        default y
+        depends on GW_VIB_ENABLE
+
+    comment "--- Light sensor (LDR module) ---"
+
+    config GW_LIGHT_ENABLE
+        bool "Enable light sensor"
+        default y
+
+    config GW_LIGHT_GPIO
+        int "Light sensor GPIO (analog mode: must be ADC1 pin, GPIO 1-10)"
+        default 4
+        range 0 48
+        depends on GW_LIGHT_ENABLE
+
+    config GW_LIGHT_ANALOG
+        bool "Light sensor has an analog output (reads 0..4095)"
+        default y
+        depends on GW_LIGHT_ENABLE
+
+    config GW_LIGHT_BRIGHT_IS_HIGH
+        bool "Higher reading = more light (turn OFF if your module is inverted)"
+        default y
+        depends on GW_LIGHT_ENABLE
+
+    comment "--- DHT11 temperature/humidity ---"
+
+    config GW_DHT11_ENABLE
+        bool "Enable DHT11"
+        default y
+
+    config GW_DHT11_GPIO
+        int "DHT11 DATA GPIO (must NOT be the same pin as another sensor)"
+        default 5
+        range 0 48
+        depends on GW_DHT11_ENABLE
+
+    comment "--- MPU6050 accelerometer/gyro (I2C) ---"
+
+    config GW_MPU_ENABLE
+        bool "Enable MPU6050"
+        default y
+
+    config GW_I2C_SDA_GPIO
+        int "I2C SDA GPIO"
+        default 40
+        range 0 48
+        depends on GW_MPU_ENABLE
+
+    config GW_I2C_SCL_GPIO
+        int "I2C SCL GPIO"
+        default 41
+        range 0 48
+        depends on GW_MPU_ENABLE
+
+    config GW_MPU_ADDR
+        hex "MPU6050 I2C address (0x68, or 0x69 if AD0 is tied to 3.3V)"
+        default 0x68
+        depends on GW_MPU_ENABLE
+
+    config GW_MPU_SEND_RAW
+        bool "Also send raw accel_x/y/z and gyro_x/y/z (6 extra rows per cycle)"
+        default n
+        depends on GW_MPU_ENABLE
+
+    comment "--- Optional extra (off by default) ---"
+
+    config GW_TEMP_ENABLE
+        bool "Enable ESP32-S3 internal chip temperature"
+        default n
+
+endmenu

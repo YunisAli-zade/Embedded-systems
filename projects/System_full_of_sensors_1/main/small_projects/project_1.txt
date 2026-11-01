@@ -1,0 +1,93 @@
+#include <stdio.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "driver/gpio.h"
+#include "esp_err.h"
+#include "esp_log.h"
+
+#include "hc_sr04.h"
+
+#define PHOTO_DIOD_PIN GPIO_NUM_7
+#define TRIGGER_PIN GPIO_NUM_4
+#define ECHO_PIN GPIO_NUM_5
+#define INFRARED GPIO_NUM_6
+#define SENSOR_PWR_GPIO GPIO_NUM_8
+
+static void sensor_power_on(void)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = 1ULL << SENSOR_PWR_GPIO,
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+
+    // İstəsən, cərəyan gücünü artırmaq olar (default adətən orta səviyyədir)
+    // gpio_set_drive_capability(SENSOR_PWR_GPIO, GPIO_DRIVE_CAP_3);
+
+    ESP_ERROR_CHECK(gpio_set_level(SENSOR_PWR_GPIO, 1));   // qidanı ver
+
+    vTaskDelay(pdMS_TO_TICKS(100));   // sensorun oyanması üçün gözlə
+}
+
+static const char *TAG = "hc_sr04_example";
+
+void app_main(void)
+{
+    sensor_power_on();
+    gpio_config_t photo_diod_conf = {
+        .pin_bit_mask = (1ULL << PHOTO_DIOD_PIN),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_ANYEDGE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE
+    };
+    gpio_config(&photo_diod_conf);
+    
+    gpio_config_t gpioconf = {
+        .pin_bit_mask = (1ULL << INFRARED),
+        .mode = GPIO_MODE_OUTPUT,
+        .intr_type = GPIO_INTR_ANYEDGE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE
+    };
+    gpio_config(&gpioconf);
+
+    hc_sr04_config_t hcconf = {
+        .trigger_pin = TRIGGER_PIN,
+        .echo_pin = ECHO_PIN,
+        .sound_speed_cm_per_us = 0.0f,
+        .timeout_us = 0
+    };
+
+    hc_sr04_handle_t handle = NULL;
+
+    hc_sr04_new_sensor(&hcconf, &handle);
+    
+    while (1)
+    {
+        int result = gpio_get_level(PHOTO_DIOD_PIN);
+        float distance_cm = 0.0f;
+        esp_err_t ret = hc_sr04_read_cm(handle, &distance_cm);
+        printf("Data: %d\n", result);
+        if (ret == ESP_OK)
+        {
+            ESP_LOGI(TAG, "distance: %.2f cm", distance_cm);
+            gpio_set_level(INFRARED, 0);
+        }
+        else if (ret == ESP_ERR_TIMEOUT)
+        {
+            ESP_LOGW(TAG, "measurement timeout");
+            gpio_set_level(INFRARED, 1);
+        }
+        else
+        {
+            ESP_LOGE(TAG, "measurement failed: %s", esp_err_to_name(ret));
+        }
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+}

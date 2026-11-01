@@ -1,0 +1,7 @@
+Flask>=3.0
+SQLAlchemy>=2.0
+
+# Yalnız istifadə etdiyin SQL serverin drayverini aç (SQLite üçün heç biri lazım deyil):
+# pymysql            # MySQL / MariaDB
+# psycopg2-binary    # PostgreSQL
+# pyodbc             # Microsoft SQL Server (+ ayrıca "ODBC Driver 17/18 for SQL Server")
